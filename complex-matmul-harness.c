@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <assert.h>
-#include <omp.h>
+//#include <omp.h>
 #include <math.h>
 
 
@@ -155,7 +155,48 @@ void matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a
 /* the fast version of matmul written by the team */
 void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a_rows, int a_cols, int b_cols) {
   //replace this
-  matmul(A, B, C, a_rows, a_cols, b_cols);
+  //matmul(A, B, C, a_rows, a_cols, b_cols);
+  float real_a[a_rows][a_cols];
+  float imag_a[a_rows][a_cols];
+  float real_b[a_cols][b_cols];
+  float imag_b[a_cols][b_cols];
+  float real_c[a_rows][b_cols];
+  float imag_c[a_rows][b_cols];
+
+  int i, j, k;
+  //i = a_rows
+  //k = a_cols
+  //k = b_rows
+  //j = b_cols 
+  for ( i = 0; i < a_rows; i++ ) {
+    for( j = 0; j < b_cols; j++ ) {
+      for ( k = 0; k < a_cols; k++ ) {
+        real_a[i][k] = A[i][k].real;
+        imag_a[i][k] = A[i][k].imag;
+        real_b[k][j] = B[k][j].real;
+        imag_b[k][j] = B[k][j].imag;
+      }
+    }
+  }
+
+  for ( i = 0; i < a_rows; i++ ) {
+    for( j = 0; j < b_cols; j++ ) {
+     float sum_real, sum_imag;
+      sum_real = 0.0;
+      sum_imag = 0.0;
+      for ( k = 0; k < a_cols; k++ ) {
+        // the following code does: sum += A[i][k] * B[k][j];
+        float product_real, product_imag;
+        product_real = real_a[i][k] * real_b[k][j] - imag_a[i][k] * imag_b[k][j];
+        product_imag = real_a[i][k] * imag_b[k][j] + imag_a[i][k] * real_b[k][j];
+        sum_real += product_real;
+        sum_imag += product_imag;
+      }
+      real_c[i][j] = sum_real;
+      imag_c[i][j] = sum_imag;
+    }
+  }
+
 }
 
 long long time_diff(struct timeval * start, struct timeval * end) {
@@ -214,7 +255,7 @@ int main(int argc, char ** argv)
   gettimeofday(&start_time, NULL);
 
   /* perform matrix multiplication */
-  matmul(A, B, C, a_dim1, a_dim2, b_dim2);
+  team_matmul(A, B, C, a_dim1, a_dim2, b_dim2);
 
   /* record finishing time */
   gettimeofday(&stop_time, NULL);
