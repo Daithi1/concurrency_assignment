@@ -5,8 +5,9 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <assert.h>
-//#include <omp.h>
+#include <omp.h>
 #include <math.h>
+#include <immintrin.h>
 
 
 
@@ -150,53 +151,242 @@ void matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a
       C[i][j] = sum;
     }
   }
+
 }
 
 /* the fast version of matmul written by the team */
 void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a_rows, int a_cols, int b_cols) {
   //replace this
   //matmul(A, B, C, a_rows, a_cols, b_cols);
-  float real_a[a_rows][a_cols];
-  float imag_a[a_rows][a_cols];
-  float real_b[a_cols][b_cols];
-  float imag_b[a_cols][b_cols];
-  float real_c[a_rows][b_cols];
-  float imag_c[a_rows][b_cols];
 
-  int i, j, k;
-  //i = a_rows
-  //k = a_cols
-  //k = b_rows
-  //j = b_cols 
-  for ( i = 0; i < a_rows; i++ ) {
-    for( j = 0; j < b_cols; j++ ) {
-      for ( k = 0; k < a_cols; k++ ) {
-        real_a[i][k] = A[i][k].real;
-        imag_a[i][k] = A[i][k].imag;
-        real_b[k][j] = B[k][j].real;
-        imag_b[k][j] = B[k][j].imag;
-      }
-    }
-  }
 
+
+  // float ** real_a = (float**) malloc(a_rows * sizeof(float*));
+  // float ** imag_a = (float**) malloc(a_rows * sizeof(float*));
+  // float ** real_b = (float**) malloc(a_cols * sizeof(float*));
+  // float ** imag_b = (float**) malloc(a_cols * sizeof(float*));
+
+  // // //i = a_rows
+  // // //k = a_cols
+  // // //k = b_rows
+  // // //j = b_cols 
+
+  // int i, j, l;
+  // for ( i = 0; i < a_rows; i++ ) {
+  //   real_a[i] = (float*) malloc(a_cols * sizeof(float));
+  //   imag_a[i] = (float*) malloc(a_cols * sizeof(float));
+    
+  //   for( j = 0; j < b_cols; j++ ) {
+  //     for (l = 0; l < a_cols; l++ ) {
+  //       if(i==0){
+  //         real_b[l] = (float*) malloc(b_cols * sizeof(float));
+  //         imag_b[l] = (float*) malloc(b_cols * sizeof(float));
+  //       }
+  //       real_a[i][l] = A[i][l].real;
+  //       imag_a[i][l] = A[i][l].imag;
+  //       real_b[l][j] = B[l][j].real;
+  //       imag_b[l][j] = B[l][j].imag;
+  //     }
+  //   }
+  // }
+
+
+  //__m128 real_a_mat, real_b_mat, imag_a_mat, imag_b_mat, product_real, product_imag, sum_real, sum_imag, a, b;
+  int i, j;
+  int iterations = a_rows * a_cols * b_cols;
+  #pragma omp parallel for if 
   for ( i = 0; i < a_rows; i++ ) {
+    #pragma omp parallel for if 
     for( j = 0; j < b_cols; j++ ) {
-     float sum_real, sum_imag;
-      sum_real = 0.0;
-      sum_imag = 0.0;
+      int k;
+      struct complex sum;
+      sum.real = 0.0;
+      sum.imag = 0.0;
       for ( k = 0; k < a_cols; k++ ) {
         // the following code does: sum += A[i][k] * B[k][j];
-        float product_real, product_imag;
-        product_real = real_a[i][k] * real_b[k][j] - imag_a[i][k] * imag_b[k][j];
-        product_imag = real_a[i][k] * imag_b[k][j] + imag_a[i][k] * real_b[k][j];
-        sum_real += product_real;
-        sum_imag += product_imag;
+        struct complex product;
+        product.real = A[i][k].real * B[k][j].real - A[i][k].imag * B[k][j].imag;
+        product.imag = A[i][k].real * B[k][j].imag + A[i][k].imag * B[k][j].real;
+        sum.real += product.real;
+        sum.imag += product.imag;
       }
-      real_c[i][j] = sum_real;
-      imag_c[i][j] = sum_imag;
+      C[i][j] = sum;
     }
   }
 
+
+  
+
+
+  // __m128 real_a_mat, real_b_mat, imag_a_mat, imag_b_mat, product_real, product_imag, sum_real, sum_imag, a, b;
+  // int a_rows_limit, b_cols_limit, a_cols_limit, need_more_ac, need_more_bc, last_ac, last_bc, last_ar;
+  // sum_real = _mm_set1_ps(0.0);
+  // sum_imag = sum_real;
+
+  // a_rows_limit = a_rows - (a_rows % 4); //Make them a multiple of 4
+  // b_cols_limit = b_cols - (b_cols % 4);
+  // a_cols_limit = a_cols - (a_cols % 4);
+  // need_more_ac = a_cols_limit != a_cols;
+  // need_more_bc = b_cols_limit != b_cols;
+  // last_ac = a_cols - 4;
+  // last_bc = b_cols - 4;
+  // last_ar = a_rows - 4;
+
+
+  // for( i = 0; i < a_rows; i++ ) {
+  //   for( j = 0; j < b_cols; j++ ) {
+  //     sum_real = _mm_set1_ps(0.0);
+  //     sum_imag = sum_real;
+  //     struct complex sum;
+  //     sum.real = 0.0;
+  //     sum.imag = 0.0;
+  //     for( k = 0; k < a_cols_limit; k+=4 ) {
+
+
+  //       real_a_mat = _mm_loadu_ps(&real_a[i][k]);
+  //       real_b_mat = _mm_loadu_ps(&real_b[k][j]);
+  //       imag_a_mat = _mm_loadu_ps(&imag_a[i][k]);
+  //       imag_b_mat = _mm_loadu_ps(&imag_b[k][j]);
+
+  //       a = _mm_mul_ps(real_a_mat, real_b_mat);
+  //       b = _mm_mul_ps(imag_a_mat, imag_b_mat);
+  //       product_real = _mm_sub_ps(a, b);
+
+  //       a = _mm_mul_ps(real_a_mat, imag_b_mat);
+  //       b = _mm_mul_ps(imag_a_mat, real_b_mat);
+  //       product_imag = _mm_add_ps(a, b);
+
+  //       sum_real = _mm_add_ps(sum_real, product_real);
+  //       sum_imag = _mm_add_ps(sum_imag, product_imag);
+  //     } 
+  //     // if(need_more_ac) {
+  //     //   real_a_mat = _mm_loadu_ps(&real_a[i][last_ac]);
+  //     //   real_b_mat = _mm_loadu_ps(&real_b[last_ac][j]);
+  //     //   imag_a_mat = _mm_loadu_ps(&imag_a[i][last_ac]);
+  //     //   imag_b_mat = _mm_loadu_ps(&imag_b[last_ac][j]);
+
+  //     //   product_real = _mm_sub_ps(_mm_mul_ps(real_a_mat, real_b_mat), _mm_mul_ps(imag_a_mat, imag_b_mat));
+  //     //   product_imag = _mm_add_ps(_mm_mul_ps(real_a_mat, imag_b_mat), _mm_mul_ps(imag_a_mat, real_b_mat));
+
+  //     //   sum_real += _mm_add_ps(sum_real, product_real);
+  //     //   sum_imag += _mm_add_ps(sum_imag, product_imag);
+  //     // }
+  //     if (i==0&&j==0){
+  //       printf("%f\n", ((float*)&sum_real)[0]);
+  //       printf("%f\n", ((float*)&sum_real)[1]);
+  //       printf("%f\n", ((float*)&sum_real)[2]);
+  //       printf("%f\n", ((float*)&sum_real)[3]); 
+  //     }
+      
+
+  //     // printf("%f\n", ((float*)&sum_imag)[0]);
+  //     // printf("%f\n", ((float*)&sum_imag)[1]);
+  //     // printf("%f\n", ((float*)&sum_imag)[2]);
+  //     // printf("%f\n", ((float*)&sum_imag)[3]);
+
+  //     sum_real = _mm_hadd_ps(sum_real, sum_real);
+  //     sum_real = _mm_hadd_ps(sum_real, sum_real);
+  //     C[i][j].real = ((float*)&sum_real)[0];
+  //     sum_imag = _mm_hadd_ps(sum_imag, sum_imag);
+  //     sum_imag = _mm_hadd_ps(sum_imag, sum_imag);
+  //     C[i][j].imag = ((float*)&sum_real)[0];
+
+
+
+  //   }
+  //   // if(need_more_bc){
+  //   //   for( k = 0; k < a_cols_limit; k+=4 ) {  
+
+  //   //     real_a_mat = _mm_loadu_ps(&real_a[i][k]);
+  //   //     real_b_mat = _mm_loadu_ps(&real_b[k][last_bc]);
+  //   //     imag_a_mat = _mm_loadu_ps(&imag_a[i][k]);
+  //   //     imag_b_mat = _mm_loadu_ps(&imag_b[k][last_bc]);
+
+  //   //     product_real = _mm_sub_ps(_mm_mul_ps(real_a_mat, real_b_mat), _mm_mul_ps(imag_a_mat, imag_b_mat));
+  //   //     product_imag = _mm_add_ps(_mm_mul_ps(real_a_mat, imag_b_mat), _mm_mul_ps(imag_a_mat, real_b_mat));
+
+  //   //     sum_real = _mm_add_ps(sum_real, product_real);
+  //   //     sum_imag = _mm_add_ps(sum_imag, product_imag);
+  //   //   } 
+  //   //   if(need_more_ac) {
+  //   //     real_a_mat = _mm_loadu_ps(&real_a[i][last_ac]);
+  //   //     real_b_mat = _mm_loadu_ps(&real_b[last_ac][last_bc]);
+  //   //     imag_a_mat = _mm_loadu_ps(&imag_a[i][last_ac]);
+  //   //     imag_b_mat = _mm_loadu_ps(&imag_b[last_ac][last_bc]);
+
+  //   //     product_real = _mm_sub_ps(_mm_mul_ps(real_a_mat, real_b_mat), _mm_mul_ps(imag_a_mat, imag_b_mat));
+  //   //     product_imag = _mm_add_ps(_mm_mul_ps(real_a_mat, imag_b_mat), _mm_mul_ps(imag_a_mat, real_b_mat));
+
+  //   //     sum_real = _mm_add_ps(sum_real, product_real);
+  //   //     sum_imag = _mm_add_ps(sum_imag, product_imag);
+  //   //   }
+
+
+  //   //   _mm_storeu_ps(&C[i][last_bc].real, sum_real);
+  //   //   _mm_storeu_ps(&C[i][last_bc].imag, sum_imag);
+  //   // }
+  // }
+  // // if(a_rows_limit != a_rows){
+  // //   for( j = 0; j < b_cols_limit; j+=4 ) {
+  // //     for( k = 0; k < a_cols_limit; k+=4 ) {  
+  // //       real_a_mat = _mm_loadu_ps(&real_a[i][k]);
+  // //       real_b_mat = _mm_loadu_ps(&real_b[k][j]);
+  // //       imag_a_mat = _mm_loadu_ps(&imag_a[i][k]);
+  // //       imag_b_mat = _mm_loadu_ps(&imag_b[k][j]);
+
+  // //       product_real = _mm_sub_ps(_mm_mul_ps(real_a_mat, real_b_mat), _mm_mul_ps(imag_a_mat, imag_b_mat));
+  // //       product_imag = _mm_add_ps(_mm_mul_ps(real_a_mat, imag_b_mat), _mm_mul_ps(imag_a_mat, real_b_mat));
+
+  // //       sum_real = _mm_add_ps(sum_real, product_real);
+  // //       sum_imag = _mm_add_ps(sum_imag, product_imag);
+  // //     } 
+  // //     if(need_more_ac) {
+  // //       real_a_mat = _mm_loadu_ps(&real_a[i][last_ac]);
+  // //       real_b_mat = _mm_loadu_ps(&real_b[last_ac][j]);
+  // //       imag_a_mat = _mm_loadu_ps(&imag_a[i][last_ac]);
+  // //       imag_b_mat = _mm_loadu_ps(&imag_b[last_ac][j]);
+
+  // //       product_real = _mm_sub_ps(_mm_mul_ps(real_a_mat, real_b_mat), _mm_mul_ps(imag_a_mat, imag_b_mat));
+  // //       product_imag = _mm_add_ps(_mm_mul_ps(real_a_mat, imag_b_mat), _mm_mul_ps(imag_a_mat, real_b_mat));
+
+  // //       sum_real = _mm_add_ps(sum_real, product_real);
+  // //       sum_imag = _mm_add_ps(sum_imag, product_imag);
+  // //     }
+
+
+  // //     _mm_storeu_ps(&C[i][j].real, sum_real);
+  // //     _mm_storeu_ps(&C[i][j].imag, sum_imag);
+  // //   }
+  // //   if(need_more_bc){
+  // //     for( k = 0; k < a_cols_limit; k+=4 ) {  
+
+  // //       real_a_mat = _mm_loadu_ps(&real_a[i][k]);
+  // //       real_b_mat = _mm_loadu_ps(&real_b[k][last_bc]);
+  // //       imag_a_mat = _mm_loadu_ps(&imag_a[i][k]);
+  // //       imag_b_mat = _mm_loadu_ps(&imag_b[k][last_bc]);
+
+  // //       product_real = _mm_sub_ps(_mm_mul_ps(real_a_mat, real_b_mat), _mm_mul_ps(imag_a_mat, imag_b_mat));
+  // //       product_imag = _mm_add_ps(_mm_mul_ps(real_a_mat, imag_b_mat), _mm_mul_ps(imag_a_mat, real_b_mat));
+
+  // //       sum_real = _mm_add_ps(sum_real, product_real);
+  // //       sum_imag = _mm_add_ps(sum_imag, product_imag);
+  // //     } 
+  // //     if(need_more_ac) {
+  // //       real_a_mat = _mm_loadu_ps(&real_a[i][last_ac]);
+  // //       real_b_mat = _mm_loadu_ps(&real_b[last_ac][last_bc]);
+  // //       imag_a_mat = _mm_loadu_ps(&imag_a[i][last_ac]);
+  // //       imag_b_mat = _mm_loadu_ps(&imag_b[last_ac][last_bc]);
+
+  // //       product_real = _mm_sub_ps(_mm_mul_ps(real_a_mat, real_b_mat), _mm_mul_ps(imag_a_mat, imag_b_mat));
+  // //       product_imag = _mm_add_ps(_mm_mul_ps(real_a_mat, imag_b_mat), _mm_mul_ps(imag_a_mat, real_b_mat));
+
+  // //       sum_real = _mm_add_ps(sum_real, product_real);
+  // //       sum_imag = _mm_add_ps(sum_imag, product_imag);
+  // //     }
+
+  // //     _mm_storeu_ps(&C[i][last_bc].real, sum_real);
+  // //     _mm_storeu_ps(&C[i][last_bc].imag, sum_imag);
+  // //   }
 }
 
 long long time_diff(struct timeval * start, struct timeval * end) {
@@ -247,6 +437,7 @@ int main(int argc, char ** argv)
 
   /* record control start time */
   gettimeofday(&pre_time, NULL);
+
 
   /* use a simple matmul routine to produce control result */
   matmul(A, B, control_matrix, a_dim1, a_dim2, b_dim2);
