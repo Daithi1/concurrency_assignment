@@ -159,58 +159,61 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
   //replace this
   //matmul(A, B, C, a_rows, a_cols, b_cols);
 
+  int b_rows = b_cols;  //transposing b
+  b_cols = a_cols;
 
+  float ** real_a = (float**) malloc(a_rows * sizeof(float*));
+  float ** imag_a = (float**) malloc(a_rows * sizeof(float*));
+  float ** real_b = (float**) malloc(b_rows * sizeof(float*));
+  float ** imag_b = (float**) malloc(b_rows * sizeof(float*));
 
-  // float ** real_a = (float**) malloc(a_rows * sizeof(float*));
-  // float ** imag_a = (float**) malloc(a_rows * sizeof(float*));
-  // float ** real_b = (float**) malloc(a_cols * sizeof(float*));
-  // float ** imag_b = (float**) malloc(a_cols * sizeof(float*));
+  // //i = a_rows
+  // //k = a_cols
+  // //k = b_rows
+  // //j = b_cols 
 
-  // // //i = a_rows
-  // // //k = a_cols
-  // // //k = b_rows
-  // // //j = b_cols 
+  int i, j;
+  for ( i = 0; i < a_rows; i++ ) {
+    real_a[i] = (float*) malloc(a_cols * sizeof(float));
+    imag_a[i] = (float*) malloc(a_cols * sizeof(float));   
+    for( j = 0; j < a_cols; j++ ) {
+      real_a[i][j] = A[i][j].real;
+      imag_a[i][j] = A[i][j].imag; 
+    }
+  }
 
-  // int i, j, l;
-  // for ( i = 0; i < a_rows; i++ ) {
-  //   real_a[i] = (float*) malloc(a_cols * sizeof(float));
-  //   imag_a[i] = (float*) malloc(a_cols * sizeof(float));
-    
-  //   for( j = 0; j < b_cols; j++ ) {
-  //     for (l = 0; l < a_cols; l++ ) {
-  //       if(i==0){
-  //         real_b[l] = (float*) malloc(b_cols * sizeof(float));
-  //         imag_b[l] = (float*) malloc(b_cols * sizeof(float));
-  //       }
-  //       real_a[i][l] = A[i][l].real;
-  //       imag_a[i][l] = A[i][l].imag;
-  //       real_b[l][j] = B[l][j].real;
-  //       imag_b[l][j] = B[l][j].imag;
-  //     }
-  //   }
-  // }
+  for ( i = 0; i < b_rows; i++ ) {
+    real_b[i] = (float*) malloc(b_cols * sizeof(float));
+    imag_b[i] = (float*) malloc(b_cols * sizeof(float));  
+    for( j = 0; j < b_cols; j++ ) {
+      real_b[i][j] = B[j][i].real;
+      imag_b[i][j] = B[j][i].imag; 
+    }
+  }
 
 
   //__m128 real_a_mat, real_b_mat, imag_a_mat, imag_b_mat, product_real, product_imag, sum_real, sum_imag, a, b;
-  int i, j;
+
   int iterations = a_rows * a_cols * b_cols;
-  #pragma omp parallel for if 
+  #pragma omp parallel for 
   for ( i = 0; i < a_rows; i++ ) {
-    #pragma omp parallel for if 
-    for( j = 0; j < b_cols; j++ ) {
+
+    #pragma omp parallel for 
+    for( j = 0; j < b_rows; j++ ) {
       int k;
-      struct complex sum;
-      sum.real = 0.0;
-      sum.imag = 0.0;
-      for ( k = 0; k < a_cols; k++ ) {
+      float sum_real, sum_imag, product_real, product_imag;
+      sum_real = 0.0;
+      sum_imag = 0.0;
+      for ( k = 0; k < a_cols; k++ ) { //a_cols = b_cols
         // the following code does: sum += A[i][k] * B[k][j];
-        struct complex product;
-        product.real = A[i][k].real * B[k][j].real - A[i][k].imag * B[k][j].imag;
-        product.imag = A[i][k].real * B[k][j].imag + A[i][k].imag * B[k][j].real;
-        sum.real += product.real;
-        sum.imag += product.imag;
+        
+        product_real = real_a[i][k] * real_b[j][k] - imag_a[i][k] * imag_b[j][k];
+        product_imag = real_a[i][k] * imag_b[j][k] + imag_a[i][k] * real_b[j][k];
+        sum_real += product_real;
+        sum_imag += product_imag;
       }
-      C[i][j] = sum;
+      C[i][j].real = sum_real;
+      C[i][j].imag = sum_imag;
     }
   }
 
