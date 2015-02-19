@@ -157,10 +157,10 @@ void matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a
 
 /* the fast version of matmul written by the team */
 void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a_rows, int a_cols, int b_cols) {
-  //replace this
-  //matmul(A, B, C, a_rows, a_cols, b_cols);
+
   int iterations = a_rows * a_cols;
   if (iterations < a_rows){
+  //Checking the multiplication does not exceed max int, if it does we want to use vectorisation so assign max int
     iterations = INT_MAX;
   } else {
     iterations = iterations * b_cols;
@@ -168,7 +168,9 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
       iterations = INT_MAX;
     }
   }
+  //Through testing found that threading, intrinsics and the overhead of converting to arrays was not worth it in these cases
   if (iterations < 27000 || (a_cols < 10 && a_rows * b_cols < 12960000) || (b_cols < 10 && a_rows * a_cols < 12960000) ){
+    //slight improvment on given matmul function (maybe) 
     int i, j, k;
     for ( i = 0; i < a_rows; i++ ) {
       for( j = 0; j < b_cols; j++ ) {
@@ -176,7 +178,6 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
         sum_imag = 0.0;
         sum_real = 0.0;
         for ( k = 0; k < a_cols; k++ ) {
-          // the following code does: sum += A[i][k] * B[k][j];
           sum_real += A[i][k].real * B[k][j].real - A[i][k].imag * B[k][j].imag;
           sum_imag += A[i][k].real * B[k][j].imag + A[i][k].imag * B[k][j].real;
         }
@@ -213,37 +214,37 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
     real_b[i] = (float*) malloc(b_cols * sizeof(float));
     imag_b[i] = (float*) malloc(b_cols * sizeof(float));  
     for( j = 0; j < b_cols; j++ ) {
-      real_b[i][j] = B[j][i].real;
+      real_b[i][j] = B[j][i].real;//Transposing
       imag_b[i][j] = B[j][i].imag; 
     }
   }
 
 
   //__m128 real_a_mat, real_b_mat, imag_a_mat, imag_b_mat, product_real, product_imag, sum_real, sum_imag, a, b;
-  
+  //for these values speedups are more with just parallelisation an no intrinsics
   if (iterations < 512000000 && (iterations > 42875 || a_cols < 4)){
+    //creates threads for outer most loop
    #pragma omp parallel for if (a_rows > 50 && a_cols * b_cols > 10000)
     for ( i = 0; i < a_rows; i++ ) {
-
+      //create threads for middle loop (B columns)
    #pragma omp parallel for if (iterations > 4913000 && a_cols > 10)
       for( j = 0; j < b_rows; j++ ) {
+        //Create private variables for each thread
         int k;
-        float sum_real, sum_imag, product_real, product_imag;
+        float sum_real, sum_imag;
         sum_real = 0.0;
         sum_imag = 0.0;
         for ( k = 0; k < a_cols; k++ ) { //a_cols = b_cols
           // the following code does: sum += A[i][k] * B[k][j];
-          
-          product_real = real_a[i][k] * real_b[j][k] - imag_a[i][k] * imag_b[j][k];
-          product_imag = real_a[i][k] * imag_b[j][k] + imag_a[i][k] * real_b[j][k];
-          sum_real += product_real;
-          sum_imag += product_imag;
+          sum_real += real_a[i][k] * real_b[j][k] - imag_a[i][k] * imag_b[j][k];
+          sum_imag += real_a[i][k] * imag_b[j][k] + imag_a[i][k] * real_b[j][k];
         }
         C[i][j].real = sum_real;
         C[i][j].imag = sum_imag;
       }
     }
   } else {
+    //For the rest of values it is best to use parallelisation and intriniscs
     int a_cols_limit, last_a_col, extra;
     float real_limit_total, imag_limit_total, real_extra, imag_extra;
     real_limit_total = 0;
@@ -251,46 +252,46 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
     real_extra = 0; 
     imag_extra = 0;
     extra = a_cols % 4;
-    a_cols_limit = a_cols - extra;
+    a_cols_limit = a_cols - extra; //calculating max for vector stuff
     #pragma omp parallel for if(a_rows > 50 && a_cols * b_cols > 10000) //WHEEEEEEEEEEEEEEEEEE
     for ( i = 0; i < a_rows; i++ ) {
      #pragma omp parallel for if(iterations > 4913000 && a_cols > 10)
+      //some nice parallelisation
       for( j = 0; j < b_rows; j++ ) {
-        // float addhoc_real[4];
-        // float addhoc_imag[4];
+        //some private variables to the thread
         int k;
         __m128 sum_real, sum_imag;
         sum_real = _mm_set1_ps(0.0);
         sum_imag = sum_real;
-        __m128 real_a_mat, real_b_mat, imag_a_mat, imag_b_mat, product_real, product_imag, a, b;
+        __m128 real_a_mat, real_b_mat, imag_a_mat, imag_b_mat, product_real, product_imag, temp_1, temp_2;
 
         for ( k = 0; k < a_cols_limit; k+=4 ) { //a_cols = b_cols
-          // the following code does: sum += A[i][k] * B[k][j];
+          //getting applicable variable
           real_a_mat = _mm_load_ps(&real_a[i][k]);
           real_b_mat = _mm_load_ps(&real_b[j][k]);
           imag_a_mat = _mm_load_ps(&imag_a[i][k]);
           imag_b_mat = _mm_load_ps(&imag_b[j][k]);
-          a = _mm_mul_ps(real_a_mat, real_b_mat);
-          b = _mm_mul_ps(imag_a_mat, imag_b_mat);
-          product_real = _mm_sub_ps(a,b);
-          a = _mm_mul_ps(real_a_mat, imag_b_mat);
-          b = _mm_mul_ps(imag_a_mat, real_b_mat);
-          product_imag = _mm_add_ps(a,b);
+          temp_1 = _mm_mul_ps(real_a_mat, real_b_mat);
+          temp_2 = _mm_mul_ps(imag_a_mat, imag_b_mat);
+          product_real = _mm_sub_ps(temp_1, temp_2);
+          temp_1 = _mm_mul_ps(real_a_mat, imag_b_mat);
+          temp_2= _mm_mul_ps(imag_a_mat, real_b_mat);
+          product_imag = _mm_add_ps(temp_1, temp_2);
           sum_real = _mm_add_ps(sum_real, product_real);
           sum_imag = _mm_add_ps(sum_imag, product_imag);
         }
         sum_real =  _mm_hadd_ps(sum_real, sum_real);
         sum_real = _mm_hadd_ps(sum_real, sum_real);
         C[i][j].real += ((float*)&sum_real)[0];
-        // _mm_store_ps(addhoc_real, sum_real);
-        // C[i][j].real += addhoc_real[0] + addhoc_real[1] + addhoc_real[2] + addhoc_real[3];
+        //getting addition of values invector
+        
         sum_imag = _mm_hadd_ps(sum_imag, sum_imag);
         sum_imag = _mm_hadd_ps(sum_imag, sum_imag);
         C[i][j].imag += ((float*)&sum_imag)[0];
-        // _mm_store_ps(addhoc_imag, sum_imag);
-        // C[i][j].imag += addhoc_imag[0] + addhoc_imag[1] + addhoc_imag[2] + addhoc_imag[3];
+        
 
         for (k = a_cols_limit; k <a_cols; k++){
+          //alowing for matrices where a_col and b_row is not a multiple of 4
           C[i][j].real += real_a[i][k] * real_b[j][k] - imag_a[i][k] * imag_b[j][k];
           C[i][j].imag +=  real_a[i][k] * imag_b[j][k] + imag_a[i][k] * real_b[j][k];
         }
