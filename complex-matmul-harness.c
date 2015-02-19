@@ -7,7 +7,8 @@
 #include <assert.h>
 #include <omp.h>
 #include <math.h>
-#include <immintrin.h>
+#include <x86intrin.h>
+#include <limits.h>
 
 
 
@@ -158,7 +159,19 @@ void matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a
 void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a_rows, int a_cols, int b_cols) {
   //replace this
   //matmul(A, B, C, a_rows, a_cols, b_cols);
-
+  int iterations = a_rows * a_cols;
+  if (iterations < a_rows){
+    iterations = INT_MAX;
+  } else {
+    iterations = iterations * b_cols;
+    if (iterations < b_cols){
+      iterations = INT_MAX;
+    }
+  }
+  if (iterations < 27000 || (a_cols < 10 && a_rows * b_cols < 12960000) ){
+    matmul(A, B, C, a_rows, a_cols, b_cols);
+    return;
+  }
   int b_rows = b_cols;  //transposing b
   b_cols = a_cols;
 
@@ -193,12 +206,12 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 
 
   //__m128 real_a_mat, real_b_mat, imag_a_mat, imag_b_mat, product_real, product_imag, sum_real, sum_imag, a, b;
-  int iterations = a_rows * a_cols * b_cols;
-  if (iterations < 512000000){
+  
+  if (iterations < 512000000 && (iterations > 42875 || a_cols < 4)){
    #pragma omp parallel for if (a_rows > 50 && a_cols * b_cols > 10000)
     for ( i = 0; i < a_rows; i++ ) {
 
-   #pragma omp parallel for if (iterations > 4913000)
+   #pragma omp parallel for if (iterations > 4913000 && a_cols > 10)
       for( j = 0; j < b_rows; j++ ) {
         int k;
         float sum_real, sum_imag, product_real, product_imag;
@@ -225,12 +238,12 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
     imag_extra = 0;
     extra = a_cols % 4;
     a_cols_limit = a_cols - extra;
-    #pragma omp parallel for  //WHEEEEEEEEEEEEEEEEEE
+    #pragma omp parallel for if(a_rows > 50 && a_cols * b_cols > 10000) //WHEEEEEEEEEEEEEEEEEE
     for ( i = 0; i < a_rows; i++ ) {
-     #pragma omp parallel for 
+     #pragma omp parallel for if(iterations > 4913000 && a_cols > 10)
       for( j = 0; j < b_rows; j++ ) {
-        float addhoc_real[4];
-        float addhoc_imag[4];
+        // float addhoc_real[4];
+        // float addhoc_imag[4];
         int k;
         __m128 sum_real, sum_imag;
         sum_real = _mm_set1_ps(0.0);
@@ -252,16 +265,16 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
           sum_real = _mm_add_ps(sum_real, product_real);
           sum_imag = _mm_add_ps(sum_imag, product_imag);
         }
-        // sum_real =  _mm_hadd_ps(sum_real, sum_real);
-        // sum_real = _mm_hadd_ps(sum_real, sum_real);
-        // C[i][j].real += ((float*)&sum_real)[0];
-        _mm_store_ps(addhoc_real, sum_real);
-        C[i][j].real += addhoc_real[0] + addhoc_real[1] + addhoc_real[2] + addhoc_real[3];
-        // sum_imag = _mm_hadd_ps(sum_imag, sum_imag);
-        // sum_imag = _mm_hadd_ps(sum_imag, sum_imag);
-        // C[i][j].imag += ((float*)&sum_imag)[0];
-        _mm_store_ps(addhoc_imag, sum_imag);
-        C[i][j].imag += addhoc_imag[0] + addhoc_imag[1] + addhoc_imag[2] + addhoc_imag[3];
+        sum_real =  _mm_hadd_ps(sum_real, sum_real);
+        sum_real = _mm_hadd_ps(sum_real, sum_real);
+        C[i][j].real += ((float*)&sum_real)[0];
+        // _mm_store_ps(addhoc_real, sum_real);
+        // C[i][j].real += addhoc_real[0] + addhoc_real[1] + addhoc_real[2] + addhoc_real[3];
+        sum_imag = _mm_hadd_ps(sum_imag, sum_imag);
+        sum_imag = _mm_hadd_ps(sum_imag, sum_imag);
+        C[i][j].imag += ((float*)&sum_imag)[0];
+        // _mm_store_ps(addhoc_imag, sum_imag);
+        // C[i][j].imag += addhoc_imag[0] + addhoc_imag[1] + addhoc_imag[2] + addhoc_imag[3];
 
         for (k = a_cols_limit; k <a_cols; k++){
           C[i][j].real += real_a[i][k] * real_b[j][k] - imag_a[i][k] * imag_b[j][k];
