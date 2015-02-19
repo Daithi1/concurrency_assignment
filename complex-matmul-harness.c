@@ -168,8 +168,22 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
       iterations = INT_MAX;
     }
   }
-  if (iterations < 27000 || (a_cols < 10 && a_rows * b_cols < 12960000) ){
-    matmul(A, B, C, a_rows, a_cols, b_cols);
+  if (iterations < 27000 || (a_cols < 10 && a_rows * b_cols < 12960000) || (b_cols < 10 && a_rows * a_cols < 12960000) ){
+    int i, j, k;
+    for ( i = 0; i < a_rows; i++ ) {
+      for( j = 0; j < b_cols; j++ ) {
+        float sum_real, sum_imag;
+        sum_imag = 0.0;
+        sum_real = 0.0;
+        for ( k = 0; k < a_cols; k++ ) {
+          // the following code does: sum += A[i][k] * B[k][j];
+          sum_real += A[i][k].real * B[k][j].real - A[i][k].imag * B[k][j].imag;
+          sum_imag += A[i][k].real * B[k][j].imag + A[i][k].imag * B[k][j].real;
+        }
+        C[i][j].real = sum_real;
+        C[i][j].imag = sum_imag;
+      }
+    }
     return;
   }
   int b_rows = b_cols;  //transposing b
