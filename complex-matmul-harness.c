@@ -1,3 +1,6 @@
+/* Please note my solution is in the team_matmul function the rest of the program used to time and compare the team_matmul function was written by Dr. David Gregg and is owned by University Dublin, Trinity College Dublin. Also there is a floating point error for larger inputs. This could be potentially be fixed with doubles or you know ints... */
+
+
 /* Test and timing harness program for developing a dense matrix
    multiplication routine for the CS3014 module */
 

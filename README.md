@@ -1,2 +1,3 @@
 # Concurreny
 Concurrency assignment for efficient complex matrix multiplication.
+Please note that only the team_matmul was written by me. The rest of the program was written by Dr. David Gregg and is there fore owned by Dublin University, Trinity College Dublin. I have know idea who owns the team_matmul code written by me. The rest of the file is a harness to time and compare my method of multiplication. The assignment can be found here https://www.cs.tcd.ie/David.Gregg/cs3014/labs/lab1 (note: this file may cease to exist/change at any time, I have no control over David Greggs course website). 
