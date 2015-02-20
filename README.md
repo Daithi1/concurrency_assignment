@@ -1,2 +1,2 @@
-# concurreny
-For Concurrency
+# Concurreny
+Concurrency assignment for efficient complex matrix multiplication.
